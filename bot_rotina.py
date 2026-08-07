@@ -142,11 +142,15 @@ CRONOGRAMA = {
 # --------------------------------------------------------------------------
 
 def enviar_mensagem(texto):
+    """Retorna True se enviou com sucesso, False se falhou (não levanta
+    exceção para não derrubar o loop contínuo do modo local)."""
     try:
         resposta = requests.post(WEBHOOK_URL, json={"content": texto}, timeout=10)
         resposta.raise_for_status()
+        return True
     except requests.RequestException as erro:
         print(f"[ERRO] Falha ao enviar mensagem: {erro}")
+        return False
 
 
 def eventos_do_dia(dia_semana, agora):
@@ -164,28 +168,40 @@ def _minutos(hora_str):
     return int(h) * 60 + int(m)
 
 
-def checar_uma_vez(janela_minutos=6):
+def checar_uma_vez(janela_minutos=4):
     """Faz uma única checagem: dispara qualquer evento cujo horário caiu
     dentro dos últimos `janela_minutos` minutos. Pensado para ser chamado
     por um agendador externo (cron/GitHub Actions) a cada poucos minutos,
     sem precisar manter processo nenhum vivo. Não guarda estado entre
     execuções — a janela de tolerância evita perder avisos por atraso do
-    agendador, e como cada execução roda uma vez só, não duplica envio."""
+    agendador, e como cada execução roda uma vez só, não duplica envio.
+
+    A janela precisa ficar MENOR que o menor intervalo entre dois eventos
+    do mesmo dia (hoje são 5 min, ex.: aviso 14:10 -> início 14:15) —
+    senão o mesmo aviso dispara de novo na execução seguinte."""
     agora = datetime.now(FUSO_HORARIO)
     dia_semana = agora.weekday()
     minutos_agora = agora.hour * 60 + agora.minute
 
     enviados = []
+    falhas = []
     for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
         diff = minutos_agora - _minutos(hora)
         if 0 <= diff <= janela_minutos:
-            enviar_mensagem(f"{emoji} **{hora}** - {msg}")
-            enviados.append(hora)
+            if enviar_mensagem(f"{emoji} **{hora}** - {msg}"):
+                enviados.append(hora)
+            else:
+                falhas.append(hora)
 
     if enviados:
         print(f"Enviados: {enviados}")
-    else:
+    if not enviados and not falhas:
         print("Nenhum evento para agora.")
+    if falhas:
+        # Sai com erro para o GitHub Actions marcar o workflow como falho
+        # e te avisar por e-mail — senão a falha passa em silêncio.
+        print(f"Falharam: {falhas}")
+        sys.exit(1)
 
 
 def main():
