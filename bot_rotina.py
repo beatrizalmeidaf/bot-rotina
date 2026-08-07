@@ -141,11 +141,44 @@ CRONOGRAMA = {
 # Execução
 # --------------------------------------------------------------------------
 
-def enviar_mensagem(texto):
-    """Retorna True se enviou com sucesso, False se falhou (não levanta
-    exceção para não derrubar o loop contínuo do modo local)."""
+# Cor do embed por categoria de evento (identificada pelo emoji).
+COR_PADRAO = 0x99AAB5  # cinza (Discord "blurple" neutro)
+CORES = {
+    "⏰": 0xFFA726,  # acordar - laranja
+    "💼": 0x3B82F6,  # trabalho - azul
+    "📚": 0x10B981,  # estudo - verde
+    "🍳": 0xF59E0B,  # refeição - amarelo
+    "🥗": 0xF59E0B,
+    "🍽️": 0xF59E0B,
+    "⚠️": 0xEF4444,  # aviso - vermelho
+    "🧠": 0x22C55E,  # aula - verde
+    "💻": 0x22C55E,
+    "🗣️": 0xA855F7,  # reunião - roxo
+    "☕": 0x9CA3AF,  # pausa - cinza
+    "🚿": 0x9CA3AF,
+    "🐾": 0xEC4899,  # pet - rosa
+    "🕊️": 0x6366F1,  # terreiro - índigo
+    "🎓": 0x1D4ED8,  # TCC - azul escuro
+    "🎮": 0x84CC16,  # tempo livre - verde claro
+    "🛌": 0x4C1D95,  # dormir - roxo escuro
+    "🌙": 0x4C1D95,
+}
+
+
+def enviar_mensagem(hora, emoji, mensagem):
+    """Envia um embed colorido (cor por categoria de evento) para o
+    webhook. Retorna True se enviou com sucesso, False se falhou (não
+    levanta exceção para não derrubar o loop contínuo do modo local)."""
+    payload = {
+        "embeds": [
+            {
+                "description": f"{emoji} **{hora}** — {mensagem}",
+                "color": CORES.get(emoji, COR_PADRAO),
+            }
+        ]
+    }
     try:
-        resposta = requests.post(WEBHOOK_URL, json={"content": texto}, timeout=10)
+        resposta = requests.post(WEBHOOK_URL, json=payload, timeout=10)
         resposta.raise_for_status()
         return True
     except requests.RequestException as erro:
@@ -188,7 +221,7 @@ def checar_uma_vez(janela_minutos=4):
     for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
         diff = minutos_agora - _minutos(hora)
         if 0 <= diff <= janela_minutos:
-            if enviar_mensagem(f"{emoji} **{hora}** - {msg}"):
+            if enviar_mensagem(hora, emoji, msg):
                 enviados.append(hora)
             else:
                 falhas.append(hora)
@@ -221,7 +254,7 @@ def main():
 
         for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
             if hora == hora_atual and hora not in ja_enviados:
-                enviar_mensagem(f"{emoji} **{hora_atual}** - {msg}")
+                enviar_mensagem(hora, emoji, msg)
                 ja_enviados.add(hora)
 
         time.sleep(20)

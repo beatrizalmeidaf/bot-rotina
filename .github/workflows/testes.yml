@@ -1,0 +1,27 @@
+name: Testes
+
+on:
+  push:
+    paths:
+      - "bot_rotina.py"
+      - "test_cronograma.py"
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - run: python -m unittest test_cronograma.py -v
+        env:
+          # Valor fake só para permitir importar bot_rotina.py durante o
+          # teste (nenhuma mensagem de verdade é enviada aqui).
+          ROTINA_WEBHOOK_URL: "https://discord.com/api/webhooks/000000000000000000/teste-fake-nao-e-usado"
