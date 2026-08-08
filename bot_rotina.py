@@ -67,16 +67,16 @@ CRONOGRAMA = {
     0: [  # SEGUNDA-FEIRA
         ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
         ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "🍳", "Pausa! Hora de fazer o almoço e a janta."),
+        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
         ("13:00", "📚", "Iniciando: Estudo - Livro de IA."),
         ("14:10", "⚠️", "Atenção: a Reunião Athon começa em 5 minutos!"),
         ("14:15", "🗣️", "Iniciando: Reunião Athon."),
         ("15:15", "📚", "Fim da Reunião Athon. Voltando ao Estudo: Livro IA."),
-        ("15:40", "☕", "Pausa para café."),
+        ("15:40", "⏸️", "Pausa: Café."),
         ("16:00", "💻", "Iniciando: Aula INF0338 (CG) [Foco Duplo: TCC ou Estudo]."),
-        ("17:40", "🐾", "Hora do Pet e do Lanche."),
-        ("19:20", "🕊️", "Iniciando: Terreiro (até 21h)."),
-        ("21:00", "🍽️", "Fim do Terreiro. Hora da Janta / Relaxar."),
+        ("17:40", "⏸️", "Pausa: Pet e Lanche."),
+        ("19:20", "⏸️", "Pausa: Terreiro (até 21h)."),
+        ("21:00", "⏸️", "Pausa: Janta / Relaxar."),
         ("23:15", "🛌", "Hora de dormir!"),
     ],
     1: [  # TERÇA-FEIRA
@@ -84,24 +84,24 @@ CRONOGRAMA = {
         ("07:55", "⚠️", "Atenção: a aula de Complexidade começa em 5 minutos!"),
         ("08:00", "🧠", "Iniciando: Aula INF0335 (Complexidade) - Foco Total."),
         ("09:40", "📚", "Fim da aula. Iniciando: Estudar Complexidade."),
-        ("11:30", "🍳", "Pausa! Hora de fazer o almoço e a janta."),
+        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
         ("13:00", "💼", "Iniciando: Trabalho - Ceia Light / PDI."),
         ("13:55", "⚠️", "Atenção: a aula de PDI começa em 5 minutos!"),
         ("14:00", "💻", "Iniciando: Aula INF0370 (PDI) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("15:40", "☕", "Pausa para café."),
+        ("15:40", "⏸️", "Pausa: Café."),
         ("16:00", "💻", "Iniciando: Aula INF0289 (IHC) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("17:40", "🐾", "Hora do Pet e da Janta."),
+        ("17:40", "⏸️", "Pausa: Pet e Janta."),
         ("18:50", "💻", "Iniciando: Aula INF0303 (Teste) [Foco Duplo: Athon]."),
-        ("22:00", "🎮", "Fim da aula. Tempo livre até a hora de dormir."),
+        ("22:00", "⏸️", "Pausa: Tempo Livre até a hora de dormir."),
     ],
     2: [  # QUARTA-FEIRA
         ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
         ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "🥗", "Pausa para o almoço rápido."),
+        ("11:30", "⏸️", "Pausa: Almoço Rápido."),
         ("13:00", "💼", "Voltando ao Trabalho - Tieta."),
-        ("15:40", "🚿", "Pausa para lavar o cabelo."),
+        ("15:40", "⏸️", "Pausa: Lavar o Cabelo."),
         ("16:00", "📚", "Iniciando: Estudo - Livro de IA."),
-        ("17:40", "🐾", "Hora do Pet e da Janta."),
+        ("17:40", "⏸️", "Pausa: Pet e Janta."),
         ("18:50", "🎓", "Iniciando: TCC."),
         ("23:15", "🛌", "Hora de dormir!"),
     ],
@@ -110,30 +110,30 @@ CRONOGRAMA = {
         ("07:55", "⚠️", "Atenção: a aula de Complexidade começa em 5 minutos!"),
         ("08:00", "🧠", "Iniciando: Aula INF0335 (Complexidade) - Foco Total."),
         ("09:40", "💼", "Fim da aula. Iniciando: Trabalho - Tieta."),
-        ("11:30", "🥗", "Pausa para o almoço rápido."),
+        ("11:30", "⏸️", "Pausa: Almoço Rápido."),
         ("13:00", "💼", "Voltando ao Trabalho - Tieta."),
-        ("15:40", "☕", "Pausa para café."),
+        ("15:40", "⏸️", "Pausa: Café."),
         ("15:55", "⚠️", "Atenção: a Reunião com a Ermis começa em 5 minutos!"),
         ("16:00", "💻", "Iniciando: Aula INF0338 (CG) [Reunião Ermis às 16h]."),
         ("16:45", "🗣️", "Fim da Reunião Ermis. Continue a Aula CG."),
-        ("17:40", "🐾", "Hora do Pet e da Janta."),
+        ("17:40", "⏸️", "Pausa: Pet e Janta."),
         ("18:50", "📚", "Iniciando: Estudar Complexidade."),
-        ("21:00", "🎮", "Fim do estudo. Tempo Livre."),
+        ("21:00", "⏸️", "Pausa: Tempo Livre."),
         ("23:00", "🌙", "Já é tarde — hora de pensar em ir dormir."),
     ],
     4: [  # SEXTA-FEIRA
         ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
         ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "🍳", "Pausa! Hora de fazer o almoço e a janta."),
+        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
         ("13:00", "📚", "Iniciando: Estudo - Livro de IA."),
         ("13:55", "⚠️", "Atenção: a aula de PDI começa em 5 minutos!"),
         ("14:00", "💻", "Iniciando: Aula INF0370 (PDI) [Foco Duplo: Athon]."),
-        ("15:40", "☕", "Pausa para café."),
+        ("15:40", "⏸️", "Pausa: Café."),
         ("15:55", "⚠️", "Atenção: o foco com a Ermis começa em 5 minutos!"),
         ("16:00", "💻", "Iniciando: Aula INF0289 (IHC) [Foco Duplo: Ermis]."),
-        ("17:40", "🐾", "Hora do Pet e da Janta."),
+        ("17:40", "⏸️", "Pausa: Pet e Janta."),
         ("18:50", "💻", "Iniciando: Aula INF0290 (Projeto) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("22:00", "🎮", "Fim da aula. Tempo Livre."),
+        ("22:00", "⏸️", "Pausa: Tempo Livre."),
     ],
 }
 
@@ -147,19 +147,12 @@ CORES = {
     "⏰": 0xFFA726,  # acordar - laranja
     "💼": 0x3B82F6,  # trabalho - azul
     "📚": 0x10B981,  # estudo - verde
-    "🍳": 0xF59E0B,  # refeição - amarelo
-    "🥗": 0xF59E0B,
-    "🍽️": 0xF59E0B,
     "⚠️": 0xEF4444,  # aviso - vermelho
     "🧠": 0x22C55E,  # aula - verde
     "💻": 0x22C55E,
     "🗣️": 0xA855F7,  # reunião - roxo
-    "☕": 0x9CA3AF,  # pausa - cinza
-    "🚿": 0x9CA3AF,
-    "🐾": 0xEC4899,  # pet - rosa
-    "🕊️": 0x6366F1,  # terreiro - índigo
+    "⏸️": 0x9CA3AF,  # pausa (almoço, janta, pet, café, tempo livre, etc) - cinza
     "🎓": 0x1D4ED8,  # TCC - azul escuro
-    "🎮": 0x84CC16,  # tempo livre - verde claro
     "🛌": 0x4C1D95,  # dormir - roxo escuro
     "🌙": 0x4C1D95,
 }
