@@ -17,6 +17,7 @@ Configuração:
 - Rode: python bot_rotina.py
 """
 
+import json
 import os
 import sys
 import time
@@ -52,6 +53,12 @@ if not WEBHOOK_URL:
     )
 
 FUSO_HORARIO = pytz.timezone("America/Sao_Paulo")
+
+# Onde o modo --once guarda qual foi o último evento já enviado, para
+# fazer "catch-up" quando o agendador externo (GitHub Actions) demorar
+# mais do que o esperado para rodar. Esse arquivo é comitado de volta
+# no repositório pelo workflow (veja .github/workflows/rotina.yml).
+ARQUIVO_CHECKPOINT = "estado/ultimo_evento.json"
 
 # Datas (formato "YYYY-MM-DD") em que a reunião mensal de sexta às 11h
 # acontece. Adicione a data do mês assim que ela for marcada, ex:
@@ -158,18 +165,21 @@ CORES = {
 }
 
 
-def enviar_mensagem(hora, emoji, mensagem):
+def enviar_mensagem(hora, emoji, mensagem, atraso_min=None):
     """Envia um embed colorido (cor por categoria de evento) para o
     webhook. Retorna True se enviou com sucesso, False se falhou (não
-    levanta exceção para não derrubar o loop contínuo do modo local)."""
-    payload = {
-        "embeds": [
-            {
-                "description": f"{emoji} **{hora}** — {mensagem}",
-                "color": CORES.get(emoji, COR_PADRAO),
-            }
-        ]
+    levanta exceção para não derrubar o loop contínuo do modo local).
+
+    `atraso_min`, se informado, mostra um rodapé avisando que a
+    mensagem chegou atrasada (o agendador externo demorou pra rodar)."""
+    embed = {
+        "description": f"{emoji} **{hora}** — {mensagem}",
+        "color": CORES.get(emoji, COR_PADRAO),
     }
+    if atraso_min is not None and atraso_min > 5:
+        embed["footer"] = {"text": f"⏱️ Atrasado {atraso_min} min (agendador demorou)"}
+
+    payload = {"embeds": [embed]}
     try:
         resposta = requests.post(WEBHOOK_URL, json=payload, timeout=10)
         resposta.raise_for_status()
@@ -194,30 +204,82 @@ def _minutos(hora_str):
     return int(h) * 60 + int(m)
 
 
-def checar_uma_vez(janela_minutos=4):
-    """Faz uma única checagem: dispara qualquer evento cujo horário caiu
-    dentro dos últimos `janela_minutos` minutos. Pensado para ser chamado
-    por um agendador externo (cron/GitHub Actions) a cada poucos minutos,
-    sem precisar manter processo nenhum vivo. Não guarda estado entre
-    execuções — a janela de tolerância evita perder avisos por atraso do
-    agendador, e como cada execução roda uma vez só, não duplica envio.
+def _ler_checkpoint():
+    """Retorna (data_str, minuto) do último evento já enviado, ou
+    (None, -1) se não existir checkpoint ainda."""
+    try:
+        with open(ARQUIVO_CHECKPOINT, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+        return dados["data"], _minutos(dados["hora"])
+    except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
+        return None, -1
 
-    A janela precisa ficar MENOR que o menor intervalo entre dois eventos
-    do mesmo dia (hoje são 5 min, ex.: aviso 14:10 -> início 14:15) —
-    senão o mesmo aviso dispara de novo na execução seguinte."""
-    agora = datetime.now(FUSO_HORARIO)
-    dia_semana = agora.weekday()
+
+def _gravar_checkpoint(data_str, hora_str):
+    os.makedirs(os.path.dirname(ARQUIVO_CHECKPOINT), exist_ok=True)
+    with open(ARQUIVO_CHECKPOINT, "w", encoding="utf-8") as f:
+        json.dump({"data": data_str, "hora": hora_str}, f)
+        f.write("\n")
+
+
+def eventos_pendentes(dia_semana, agora, checkpoint_data, checkpoint_minuto, atraso_maximo_minutos=120):
+    """Função pura (sem I/O): retorna os eventos de hoje que já venceram
+    e ainda não foram enviados, como lista de (hora, emoji, msg, atraso).
+
+    - Pula eventos já cobertos pelo checkpoint (evita duplicar envio).
+    - Pula eventos cujo horário ainda não chegou.
+    - Pula eventos velhos demais (> atraso_maximo_minutos) - não vale
+      mais mandar um "começa em 5 minutos" com horas de atraso."""
+    hoje_str = agora.strftime("%Y-%m-%d")
+    ja_processado_hoje = checkpoint_data == hoje_str
     minutos_agora = agora.hour * 60 + agora.minute
+
+    pendentes = []
+    for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
+        evento_min = _minutos(hora)
+
+        if ja_processado_hoje and evento_min <= checkpoint_minuto:
+            continue
+
+        atraso = minutos_agora - evento_min
+        if atraso < 0 or atraso > atraso_maximo_minutos:
+            continue
+
+        pendentes.append((hora, emoji, msg, atraso))
+    return pendentes
+
+
+def checar_uma_vez(atraso_maximo_minutos=120):
+    """Faz uma única checagem com "catch-up": em vez de olhar só pra um
+    instante exato, manda todo evento de hoje que já venceu desde o
+    último checkpoint gravado (estado/ultimo_evento.json) até agora.
+
+    Isso existe porque o agendador externo (GitHub Actions) NÃO garante
+    rodar a cada 5 minutos como configurado — na prática já observamos
+    intervalos de mais de 2h entre execuções. Sem catch-up, qualquer
+    evento que caísse num desses buracos seria perdido pra sempre."""
+    agora = datetime.now(FUSO_HORARIO)
+    hoje_str = agora.strftime("%Y-%m-%d")
+    checkpoint_data, checkpoint_minuto = _ler_checkpoint()
+
+    pendentes = eventos_pendentes(
+        agora.weekday(), agora, checkpoint_data, checkpoint_minuto, atraso_maximo_minutos
+    )
 
     enviados = []
     falhas = []
-    for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
-        diff = minutos_agora - _minutos(hora)
-        if 0 <= diff <= janela_minutos:
-            if enviar_mensagem(hora, emoji, msg):
-                enviados.append(hora)
-            else:
-                falhas.append(hora)
+    maior_minuto_enviado = checkpoint_minuto if checkpoint_data == hoje_str else -1
+
+    for hora, emoji, msg, atraso in pendentes:
+        if enviar_mensagem(hora, emoji, msg, atraso_min=atraso):
+            enviados.append(hora)
+            maior_minuto_enviado = max(maior_minuto_enviado, _minutos(hora))
+        else:
+            falhas.append(hora)
+
+    if maior_minuto_enviado >= 0 and maior_minuto_enviado > checkpoint_minuto:
+        nova_hora = f"{maior_minuto_enviado // 60:02d}:{maior_minuto_enviado % 60:02d}"
+        _gravar_checkpoint(hoje_str, nova_hora)
 
     if enviados:
         print(f"Enviados: {enviados}")
