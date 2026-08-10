@@ -77,15 +77,15 @@ class TestEventosPendentes(unittest.TestCase):
         self.assertNotIn("08:00", horas)
 
     def test_catchup_pega_evento_perdido_num_gap_grande(self):
-        # Checkpoint em 09:40; agendador só roda de novo às 13:00 (mais
-        # de 3h de buraco) -> tem que recuperar o 11:30 (90min de
+        # Checkpoint em 09:40; agendador só roda de novo às 13:30 (mais
+        # de 3h de buraco) -> tem que recuperar o 11:30 (100min de
         # atraso, o que uma janela fixa de poucos minutos jamais pegaria)
-        # e o 13:00, sem duplicar nada anterior a 09:40.
-        agora = _agora("13:00")
+        # e o 13:30, sem duplicar nada anterior a 09:40.
+        agora = _agora("13:30")
         checkpoint_data = agora.strftime("%Y-%m-%d")
         pend = bot.eventos_pendentes(4, agora, checkpoint_data, bot._minutos("09:40"))
         horas = [h for h, _, _, _ in pend]
-        self.assertEqual(horas, ["11:30", "13:00"])
+        self.assertEqual(horas, ["11:30", "13:30"])
 
     def test_evento_velho_demais_e_descartado(self):
         # 06:45 com agendador rodando só às 14:00 (mais de 2h de atraso,
