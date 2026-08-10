@@ -36,7 +36,11 @@ jobs:
 
       - name: Salvar checkpoint (se mudou)
         run: |
-          if git diff --quiet -- estado/; then
+          # "git diff" não vê arquivo novo/nunca commitado (untracked) -
+          # por isso usamos "git status --porcelain", que detecta os dois
+          # casos (novo e modificado) e não dá erro se estado/ nem existir.
+          mudancas=$(git status --porcelain -- estado/ 2>/dev/null)
+          if [ -z "$mudancas" ]; then
             echo "Checkpoint não mudou, nada para comitar."
           else
             git config user.name "github-actions[bot]"
