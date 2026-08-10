@@ -1,14 +1,14 @@
 """
-Bot de Rotina — envia avisos de início, fim e alertas da agenda semanal
-para um canal do Discord via webhook.
+Bot de Rotina — envia um resumo com a rotina do dia inteiro para um
+canal do Discord via webhook, uma vez por dia, de manhã.
 
 Como funciona:
 - Não precisa logar como bot (sem token, sem convite em servidor, sem
   ID de canal). Só usa a URL de um webhook do canal onde quer receber
   os avisos.
-- A cada 20s verifica o horário atual (fuso America/Sao_Paulo) e dispara
-  as mensagens cadastradas em CRONOGRAMA para o dia da semana e horário
-  correspondentes.
+- Em vez de mandar um aviso por evento ao longo do dia (que dependia de
+  precisão de minuto do agendador externo), manda UM bloco só, listando
+  toda a rotina daquele dia da semana, por volta de HORA_RESUMO.
 
 Configuração:
 - Crie um arquivo `.env` (veja `.env.example`) com:
@@ -54,11 +54,24 @@ if not WEBHOOK_URL:
 
 FUSO_HORARIO = pytz.timezone("America/Sao_Paulo")
 
-# Onde o modo --once guarda qual foi o último evento já enviado, para
-# fazer "catch-up" quando o agendador externo (GitHub Actions) demorar
-# mais do que o esperado para rodar. Esse arquivo é comitado de volta
-# no repositório pelo workflow (veja .github/workflows/rotina.yml).
-ARQUIVO_CHECKPOINT = "estado/ultimo_evento.json"
+# Onde o modo --once guarda a data do último resumo diário já enviado
+# (ou já descartado por atraso), para não mandar de novo no mesmo dia.
+# Esse arquivo é comitado de volta no repositório pelo workflow (veja
+# .github/workflows/rotina.yml).
+ARQUIVO_CHECKPOINT = "estado/ultimo_resumo.json"
+
+# Horário-alvo do resumo diário e por quanto tempo depois disso ainda
+# vale a pena mandar atrasado (depois disso, desiste do dia).
+HORA_RESUMO = "07:00"
+ATRASO_MAXIMO_RESUMO_MINUTOS = 180
+
+NOMES_DIAS = {
+    0: "Segunda-feira",
+    1: "Terça-feira",
+    2: "Quarta-feira",
+    3: "Quinta-feira",
+    4: "Sexta-feira",
+}
 
 # Datas (formato "YYYY-MM-DD") em que a reunião mensal de sexta às 11h
 # acontece. Adicione a data do mês assim que ela for marcada, ex:
@@ -144,50 +157,6 @@ CRONOGRAMA = {
     ],
 }
 
-# --------------------------------------------------------------------------
-# Execução
-# --------------------------------------------------------------------------
-
-# Cor do embed por categoria de evento (identificada pelo emoji).
-COR_PADRAO = 0x99AAB5  # cinza (Discord "blurple" neutro)
-CORES = {
-    "⏰": 0xFFA726,  # acordar - laranja
-    "💼": 0x3B82F6,  # trabalho - azul
-    "📚": 0x10B981,  # estudo - verde
-    "⚠️": 0xEF4444,  # aviso - vermelho
-    "🧠": 0x22C55E,  # aula - verde
-    "💻": 0x22C55E,
-    "🗣️": 0xA855F7,  # reunião - roxo
-    "⏸️": 0x9CA3AF,  # pausa (almoço, janta, pet, café, tempo livre, etc) - cinza
-    "🎓": 0x1D4ED8,  # TCC - azul escuro
-    "🛌": 0x4C1D95,  # dormir - roxo escuro
-    "🌙": 0x4C1D95,
-}
-
-
-def enviar_mensagem(hora, emoji, mensagem, atraso_min=None):
-    """Envia um embed colorido (cor por categoria de evento) para o
-    webhook. Retorna True se enviou com sucesso, False se falhou (não
-    levanta exceção para não derrubar o loop contínuo do modo local).
-
-    `atraso_min`, se informado, mostra um rodapé avisando que a
-    mensagem chegou atrasada (o agendador externo demorou pra rodar)."""
-    embed = {
-        "description": f"{emoji} **{hora}** — {mensagem}",
-        "color": CORES.get(emoji, COR_PADRAO),
-    }
-    if atraso_min is not None and atraso_min > 5:
-        embed["footer"] = {"text": f"⏱️ Atrasado {atraso_min} min (agendador demorou)"}
-
-    payload = {"embeds": [embed]}
-    try:
-        resposta = requests.post(WEBHOOK_URL, json=payload, timeout=10)
-        resposta.raise_for_status()
-        return True
-    except requests.RequestException as erro:
-        print(f"[ERRO] Falha ao enviar mensagem: {erro}")
-        return False
-
 
 def eventos_do_dia(dia_semana, agora):
     eventos = list(CRONOGRAMA.get(dia_semana, []))
@@ -196,6 +165,7 @@ def eventos_do_dia(dia_semana, agora):
             ("10:55", "⚠️", "Atenção: a reunião mensal às 11h começa em 5 minutos!"),
             ("11:00", "🗣️", "Iniciando: Reunião mensal (11h)."),
         ]
+        eventos.sort(key=lambda e: _minutos(e[0]))
     return eventos
 
 
@@ -204,113 +174,133 @@ def _minutos(hora_str):
     return int(h) * 60 + int(m)
 
 
+# --------------------------------------------------------------------------
+# Checkpoint (evita mandar o resumo duas vezes no mesmo dia)
+# --------------------------------------------------------------------------
+
 def _ler_checkpoint():
-    """Retorna (data_str, minuto) do último evento já enviado, ou
-    (None, -1) se não existir checkpoint ainda."""
+    """Retorna a data (YYYY-MM-DD) do último resumo diário já enviado
+    ou descartado, ou None se não existir checkpoint ainda."""
     try:
         with open(ARQUIVO_CHECKPOINT, "r", encoding="utf-8") as f:
-            dados = json.load(f)
-        return dados["data"], _minutos(dados["hora"])
+            return json.load(f)["data"]
     except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
-        return None, -1
+        return None
 
 
-def _gravar_checkpoint(data_str, hora_str):
+def _gravar_checkpoint(data_str):
     os.makedirs(os.path.dirname(ARQUIVO_CHECKPOINT), exist_ok=True)
     with open(ARQUIVO_CHECKPOINT, "w", encoding="utf-8") as f:
-        json.dump({"data": data_str, "hora": hora_str}, f)
+        json.dump({"data": data_str}, f)
         f.write("\n")
 
 
-def eventos_pendentes(dia_semana, agora, checkpoint_data, checkpoint_minuto, atraso_maximo_minutos=120):
-    """Função pura (sem I/O): retorna os eventos de hoje que já venceram
-    e ainda não foram enviados, como lista de (hora, emoji, msg, atraso).
+# --------------------------------------------------------------------------
+# Decisão de envio (função pura, sem I/O - fácil de testar)
+# --------------------------------------------------------------------------
 
-    - Pula eventos já cobertos pelo checkpoint (evita duplicar envio).
-    - Pula eventos cujo horário ainda não chegou.
-    - Pula eventos velhos demais (> atraso_maximo_minutos) - não vale
-      mais mandar um "começa em 5 minutos" com horas de atraso."""
+def resumo_pendente(dia_semana, agora, checkpoint_data, atraso_maximo_minutos=ATRASO_MAXIMO_RESUMO_MINUTOS):
+    """Decide se o resumo do dia deve ser mandado agora.
+
+    Retorna (deve_enviar, atraso_minutos, motivo). `atraso_minutos` é
+    quanto tempo já passou de HORA_RESUMO (0 se está em cima da hora).
+    Se atraso_minutos > atraso_maximo_minutos, desiste do dia (não vale
+    mais mandar um resumo "bom dia" à tarde)."""
     hoje_str = agora.strftime("%Y-%m-%d")
-    ja_processado_hoje = checkpoint_data == hoje_str
+
+    if checkpoint_data == hoje_str:
+        return False, 0, "resumo de hoje já foi enviado"
+
+    eventos = eventos_do_dia(dia_semana, agora)
+    if not eventos:
+        return False, 0, "hoje não tem cronograma (fim de semana)"
+
     minutos_agora = agora.hour * 60 + agora.minute
+    atraso = minutos_agora - _minutos(HORA_RESUMO)
 
-    pendentes = []
-    for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
-        evento_min = _minutos(hora)
+    if atraso < 0:
+        return False, 0, "ainda não é hora do resumo"
+    if atraso > atraso_maximo_minutos:
+        return False, atraso, "atrasado demais, desistindo do resumo de hoje"
 
-        if ja_processado_hoje and evento_min <= checkpoint_minuto:
-            continue
-
-        atraso = minutos_agora - evento_min
-        if atraso < 0 or atraso > atraso_maximo_minutos:
-            continue
-
-        pendentes.append((hora, emoji, msg, atraso))
-    return pendentes
+    return True, atraso, "pendente"
 
 
-def checar_uma_vez(atraso_maximo_minutos=120):
-    """Faz uma única checagem com "catch-up": em vez de olhar só pra um
-    instante exato, manda todo evento de hoje que já venceu desde o
-    último checkpoint gravado (estado/ultimo_evento.json) até agora.
+# --------------------------------------------------------------------------
+# Execução
+# --------------------------------------------------------------------------
 
-    Isso existe porque o agendador externo (GitHub Actions) NÃO garante
-    rodar a cada 5 minutos como configurado — na prática já observamos
-    intervalos de mais de 2h entre execuções. Sem catch-up, qualquer
-    evento que caísse num desses buracos seria perdido pra sempre."""
+COR_RESUMO = 0x5865F2  # blurple do Discord
+
+
+def montar_resumo(eventos):
+    return "\n".join(f"{emoji} **{hora}** — {msg}" for hora, emoji, msg in eventos)
+
+
+def enviar_resumo(dia_semana, eventos, atraso_min=None):
+    """Envia o resumo do dia inteiro como um embed único. Retorna True
+    se enviou com sucesso, False se falhou."""
+    nome_dia = NOMES_DIAS.get(dia_semana, "Hoje")
+    embed = {
+        "title": f"📅 Rotina de {nome_dia}",
+        "description": montar_resumo(eventos),
+        "color": COR_RESUMO,
+    }
+    if atraso_min is not None and atraso_min > 10:
+        embed["footer"] = {"text": f"⏱️ Enviado com {atraso_min} min de atraso (agendador demorou)"}
+
+    try:
+        resposta = requests.post(WEBHOOK_URL, json={"embeds": [embed]}, timeout=10)
+        resposta.raise_for_status()
+        return True
+    except requests.RequestException as erro:
+        print(f"[ERRO] Falha ao enviar resumo: {erro}")
+        return False
+
+
+def checar_uma_vez():
+    """Roda uma vez (chamado pelo agendador externo). Manda o resumo do
+    dia se ele estiver pendente; se estiver atrasado demais, desiste em
+    silêncio e marca o dia como tratado, pra não ficar tentando (e nem
+    mandar um "bom dia" de tardezinha)."""
     agora = datetime.now(FUSO_HORARIO)
     hoje_str = agora.strftime("%Y-%m-%d")
-    checkpoint_data, checkpoint_minuto = _ler_checkpoint()
+    dia_semana = agora.weekday()
+    checkpoint_data = _ler_checkpoint()
 
-    pendentes = eventos_pendentes(
-        agora.weekday(), agora, checkpoint_data, checkpoint_minuto, atraso_maximo_minutos
-    )
+    deve_enviar, atraso, motivo = resumo_pendente(dia_semana, agora, checkpoint_data)
+    print(motivo)
 
-    enviados = []
-    falhas = []
-    maior_minuto_enviado = checkpoint_minuto if checkpoint_data == hoje_str else -1
+    if not deve_enviar:
+        if motivo.startswith("atrasado"):
+            _gravar_checkpoint(hoje_str)
+        return
 
-    for hora, emoji, msg, atraso in pendentes:
-        if enviar_mensagem(hora, emoji, msg, atraso_min=atraso):
-            enviados.append(hora)
-            maior_minuto_enviado = max(maior_minuto_enviado, _minutos(hora))
-        else:
-            falhas.append(hora)
-
-    if maior_minuto_enviado >= 0 and maior_minuto_enviado > checkpoint_minuto:
-        nova_hora = f"{maior_minuto_enviado // 60:02d}:{maior_minuto_enviado % 60:02d}"
-        _gravar_checkpoint(hoje_str, nova_hora)
-
-    if enviados:
-        print(f"Enviados: {enviados}")
-    if not enviados and not falhas:
-        print("Nenhum evento para agora.")
-    if falhas:
-        # Sai com erro para o GitHub Actions marcar o workflow como falho
-        # e te avisar por e-mail — senão a falha passa em silêncio.
-        print(f"Falharam: {falhas}")
+    eventos = eventos_do_dia(dia_semana, agora)
+    if enviar_resumo(dia_semana, eventos, atraso_min=atraso):
+        _gravar_checkpoint(hoje_str)
+        print(f"Resumo de {NOMES_DIAS.get(dia_semana)} enviado ({len(eventos)} eventos).")
+    else:
+        # Sai com erro para o GitHub Actions marcar o workflow como
+        # falho e avisar por e-mail - sem gravar checkpoint, a próxima
+        # execução tenta de novo.
         sys.exit(1)
 
 
 def main():
-    print("Bot de rotina iniciado. Monitorando horários...")
-    ja_enviados = set()
-    dia_referencia = None
+    print("Bot de rotina iniciado (modo resumo diário, às " + HORA_RESUMO + ").")
+    checkpoint_data = _ler_checkpoint()
 
     while True:
         agora = datetime.now(FUSO_HORARIO)
+        dia_semana = agora.weekday()
 
-        if agora.date() != dia_referencia:
-            dia_referencia = agora.date()
-            ja_enviados = set()
-
-        dia_semana = agora.weekday()  # 0 = Segunda ... 6 = Domingo
-        hora_atual = agora.strftime("%H:%M")
-
-        for hora, emoji, msg in eventos_do_dia(dia_semana, agora):
-            if hora == hora_atual and hora not in ja_enviados:
-                enviar_mensagem(hora, emoji, msg)
-                ja_enviados.add(hora)
+        deve_enviar, atraso, _motivo = resumo_pendente(dia_semana, agora, checkpoint_data)
+        if deve_enviar:
+            eventos = eventos_do_dia(dia_semana, agora)
+            if enviar_resumo(dia_semana, eventos, atraso_min=atraso or None):
+                checkpoint_data = agora.strftime("%Y-%m-%d")
+                _gravar_checkpoint(checkpoint_data)
 
         time.sleep(20)
 

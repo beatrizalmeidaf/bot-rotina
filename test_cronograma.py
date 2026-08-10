@@ -1,7 +1,7 @@
-"""Testes de sanidade do cronograma e da lógica de catch-up. Rodam a
-cada push via GitHub Actions (.github/workflows/testes.yml) para pegar
-erros de digitação/estrutura, ou regressões na lógica de catch-up,
-antes que virem um evento perdido/duplicado de verdade.
+"""Testes de sanidade do cronograma e da lógica do resumo diário. Rodam
+a cada push via GitHub Actions (.github/workflows/testes.yml) para
+pegar erros de digitação/estrutura, ou regressões na decisão de quando
+mandar o resumo, antes que virem um dia sem notificação de verdade.
 
 Rodar localmente: python -m unittest test_cronograma.py -v
 """
@@ -15,11 +15,10 @@ import bot_rotina as bot
 PADRAO_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
-def _agora(hora_str, dia=4):
-    """Monta um datetime de teste (sexta 2026-08-08 por padrão) na
-    hora informada, já no fuso da rotina."""
+def _agora(hora_str, dia=0):
+    """Monta um datetime de teste (semana de 2026-08-03, segunda) na
+    hora informada, já no fuso da rotina. dia: 0=Segunda ... 6=Domingo."""
     h, m = bot._minutos(hora_str) // 60, bot._minutos(hora_str) % 60
-    # 2026-08-03 é uma segunda-feira, então dia=0..4 soma direto.
     data = datetime.date(2026, 8, 3) + datetime.timedelta(days=dia)
     return bot.FUSO_HORARIO.localize(datetime.datetime(data.year, data.month, data.day, h, m))
 
@@ -58,47 +57,52 @@ class TestCronograma(unittest.TestCase):
             )
 
 
-class TestEventosPendentes(unittest.TestCase):
-    """Cobre a lógica de catch-up (bot_rotina.eventos_pendentes), que
-    evita tanto perder eventos (agendador atrasado) quanto duplicá-los
-    (mesma execução, ou execuções seguintes no mesmo dia)."""
+class TestResumoPendente(unittest.TestCase):
+    """Cobre a decisão de quando mandar o resumo diário
+    (bot_rotina.resumo_pendente), incluindo o catch-up por atraso do
+    agendador e o corte para não mandar um resumo tarde demais."""
 
-    def test_sem_checkpoint_pega_evento_do_instante(self):
-        # Sexta 08:00 = "Iniciando: Trabalho - Tieta."
-        pend = bot.eventos_pendentes(4, _agora("08:00"), None, -1)
-        horas = [h for h, _, _, _ in pend]
-        self.assertIn("08:00", horas)
+    def test_antes_da_hora_nao_envia(self):
+        deve, atraso, motivo = bot.resumo_pendente(0, _agora("06:59"), None)
+        self.assertFalse(deve)
+        self.assertEqual(atraso, 0)
 
-    def test_nao_repete_evento_ja_coberto_pelo_checkpoint(self):
-        agora = _agora("08:00")
+    def test_na_hora_certa_envia_sem_atraso(self):
+        deve, atraso, _motivo = bot.resumo_pendente(0, _agora("07:00"), None)
+        self.assertTrue(deve)
+        self.assertEqual(atraso, 0)
+
+    def test_atrasado_mas_dentro_do_limite_ainda_envia(self):
+        # HORA_RESUMO=07:00, agendador só roda 08:30 -> 90min de atraso,
+        # dentro do limite de 180min.
+        deve, atraso, _motivo = bot.resumo_pendente(0, _agora("08:30"), None)
+        self.assertTrue(deve)
+        self.assertEqual(atraso, 90)
+
+    def test_atrasado_demais_desiste(self):
+        # 210min de atraso > limite de 180min.
+        deve, atraso, motivo = bot.resumo_pendente(0, _agora("10:30"), None)
+        self.assertFalse(deve)
+        self.assertEqual(atraso, 210)
+        self.assertTrue(motivo.startswith("atrasado"))
+
+    def test_ja_enviado_hoje_nao_envia_de_novo(self):
+        agora = _agora("07:05")
         checkpoint_data = agora.strftime("%Y-%m-%d")
-        pend = bot.eventos_pendentes(4, agora, checkpoint_data, bot._minutos("08:00"))
-        horas = [h for h, _, _, _ in pend]
-        self.assertNotIn("08:00", horas)
+        deve, _atraso, _motivo = bot.resumo_pendente(0, agora, checkpoint_data)
+        self.assertFalse(deve)
 
-    def test_catchup_pega_evento_perdido_num_gap_grande(self):
-        # Checkpoint em 09:40; agendador só roda de novo às 13:30 (mais
-        # de 3h de buraco) -> tem que recuperar o 11:30 (100min de
-        # atraso, o que uma janela fixa de poucos minutos jamais pegaria)
-        # e o 13:30, sem duplicar nada anterior a 09:40.
-        agora = _agora("13:30")
-        checkpoint_data = agora.strftime("%Y-%m-%d")
-        pend = bot.eventos_pendentes(4, agora, checkpoint_data, bot._minutos("09:40"))
-        horas = [h for h, _, _, _ in pend]
-        self.assertEqual(horas, ["11:30", "13:30"])
+    def test_checkpoint_de_outro_dia_nao_bloqueia(self):
+        agora = _agora("07:05")
+        checkpoint_de_ontem = "2000-01-01"
+        deve, _atraso, _motivo = bot.resumo_pendente(0, agora, checkpoint_de_ontem)
+        self.assertTrue(deve)
 
-    def test_evento_velho_demais_e_descartado(self):
-        # 06:45 com agendador rodando só às 14:00 (mais de 2h de atraso,
-        # acima do default de 120min) não deve mais ser enviado.
-        agora = _agora("14:00")
-        pend = bot.eventos_pendentes(4, agora, None, -1, atraso_maximo_minutos=120)
-        horas = [h for h, _, _, _ in pend]
-        self.assertNotIn("06:45", horas)
-
-    def test_evento_futuro_nao_e_pendente(self):
-        pend = bot.eventos_pendentes(4, _agora("07:00"), None, -1)
-        horas = [h for h, _, _, _ in pend]
-        self.assertNotIn("08:00", horas)
+    def test_fim_de_semana_sem_cronograma_nao_envia(self):
+        # dia=5 -> sábado (sem chave em CRONOGRAMA)
+        deve, _atraso, motivo = bot.resumo_pendente(5, _agora("07:00", dia=5), None)
+        self.assertFalse(deve)
+        self.assertIn("fim de semana", motivo)
 
 
 if __name__ == "__main__":
