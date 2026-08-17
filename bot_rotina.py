@@ -1,14 +1,13 @@
 """
-Bot de Rotina — envia um resumo com a rotina do dia inteiro para um
-canal do Discord via webhook, uma vez por dia, de manhã.
+Bot de Rotina — envia um resumo com a rotina do dia para um canal do
+Discord via webhook, uma vez por dia, de manhã.
 
 Como funciona:
 - Não precisa logar como bot (sem token, sem convite em servidor, sem
   ID de canal). Só usa a URL de um webhook do canal onde quer receber
   os avisos.
-- Em vez de mandar um aviso por evento ao longo do dia (que dependia de
-  precisão de minuto do agendador externo), manda UM bloco só, listando
-  toda a rotina daquele dia da semana, por volta de HORA_RESUMO.
+- Manda UM bloco só por dia, listando a rotina daquele dia da semana em
+  faixas de horário largas, perto de HORA_RESUMO.
 
 Configuração:
 - Crie um arquivo `.env` (veja `.env.example`) com:
@@ -73,105 +72,90 @@ NOMES_DIAS = {
     4: "Sexta-feira",
 }
 
-# Datas (formato "YYYY-MM-DD") em que a reunião mensal de sexta às 11h
-# acontece. Adicione a data do mês assim que ela for marcada, ex:
-# REUNIOES_MENSAIS_SEXTA = {"2026-08-07", "2026-09-04"}
-REUNIOES_MENSAIS_SEXTA = set()
-
 # --------------------------------------------------------------------------
 # Cronograma (0 = Segunda ... 4 = Sexta)
-# Cada evento: hora "HH:MM", emoji e mensagem.
+# Cada item: faixa de horário ("HH:MM - HH:MM" ou só "HH:MM") e descrição.
 # --------------------------------------------------------------------------
 
 CRONOGRAMA = {
     0: [  # SEGUNDA-FEIRA
-        ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
-        ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
-        ("13:30", "📚", "Iniciando: Estudo - Livro de IA."),
-        ("14:10", "⚠️", "Atenção: a Reunião Athon começa em 5 minutos!"),
-        ("14:15", "🗣️", "Iniciando: Reunião Athon."),
-        ("15:15", "📚", "Fim da Reunião Athon. Voltando ao Estudo: Livro IA."),
-        ("15:40", "⏸️", "Pausa: Café."),
-        ("16:00", "💻", "Iniciando: Aula INF0338 (CG) [Foco Duplo: TCC ou Estudo]."),
-        ("17:40", "⏸️", "Pausa: Pet e Lanche."),
-        ("19:20", "⏸️", "Pausa: Terreiro (até 21h)."),
-        ("21:00", "⏸️", "Pausa: Janta / Relaxar."),
-        ("23:15", "🛌", "Hora de dormir!"),
+        ("06:45 - 08:00", "Acordar"),
+        ("08:00 - 11:30", "Trabalho: Tieta"),
+        ("11:30 - 13:00", "Almoço e janta"),
+        ("13:00 - 15:40", "Estudo: Livro IA (Reunião Athon 14:15-15:15)"),
+        ("15:40 - 16:00", "Pausa"),
+        ("16:00 - 17:40", "Aula: CG (foco: TCC ou estudo)"),
+        ("17:40 - 19:20", "Pausa"),
+        ("19:20 - 21:00", "Terreiro"),
+        ("21:00 - 22:00", "Janta / relaxar"),
+        ("22:00 - 23:15", "Dormir"),
     ],
     1: [  # TERÇA-FEIRA
-        ("06:45", "⏰", "Bom dia! Hora de acordar e cuidar da pet."),
-        ("07:55", "⚠️", "Atenção: a aula de Complexidade começa em 5 minutos!"),
-        ("08:00", "🧠", "Iniciando: Aula INF0335 (Complexidade) - Foco Total."),
-        ("09:40", "📚", "Fim da aula. Iniciando: Estudar Complexidade."),
-        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
-        ("13:30", "💼", "Iniciando: Trabalho - Ceia Light / PDI."),
-        ("13:55", "⚠️", "Atenção: a aula de PDI começa em 5 minutos!"),
-        ("14:00", "💻", "Iniciando: Aula INF0370 (PDI) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("15:40", "⏸️", "Pausa: Café."),
-        ("16:00", "💻", "Iniciando: Aula INF0289 (IHC) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("17:40", "⏸️", "Pausa: Pet e Janta."),
-        ("18:50", "💻", "Iniciando: Aula INF0303 (Teste) [Foco Duplo: Athon]."),
-        ("22:00", "⏸️", "Pausa: Tempo Livre até a hora de dormir."),
+        ("06:45 - 08:00", "Acordar"),
+        ("08:00 - 09:40", "Aula: Complexidade (foco total)"),
+        ("09:40 - 11:30", "Estudar: Complexidade"),
+        ("11:30 - 13:00", "Almoço e janta"),
+        ("13:00 - 14:00", "Trabalho: Ceia Light / PDI"),
+        ("14:00 - 15:40", "Aula: PDI (foco: trabalho PDI / Ceia Light)"),
+        ("15:40 - 16:00", "Pausa"),
+        ("16:00 - 17:40", "Aula: IHC (foco: trabalho PDI / Ceia Light)"),
+        ("17:40 - 18:50", "Janta"),
+        ("18:50 - 22:00", "Aula: Teste (foco: Athon)"),
+        ("22:00 - 23:15", "Tempo livre / dormir"),
     ],
     2: [  # QUARTA-FEIRA
-        ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
-        ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "⏸️", "Pausa: Almoço Rápido."),
-        ("13:30", "💼", "Voltando ao Trabalho - Tieta."),
-        ("15:40", "⏸️", "Pausa: Lavar o Cabelo."),
-        ("16:00", "📚", "Iniciando: Estudo - Livro de IA."),
-        ("17:40", "⏸️", "Pausa: Pet e Janta."),
-        ("18:50", "🎓", "Iniciando: TCC."),
-        ("23:15", "🛌", "Hora de dormir!"),
+        ("06:45 - 08:00", "Acordar"),
+        ("08:00 - 11:30", "Trabalho: Tieta"),
+        ("11:30 - 13:00", "Almoço rápido"),
+        ("13:00 - 15:40", "Trabalho: Tieta"),
+        ("15:40 - 16:00", "Pausa"),
+        ("16:00 - 17:40", "Estudo: Livro IA"),
+        ("17:40 - 18:50", "Janta"),
+        ("18:50 - 23:15", "TCC"),
+        ("23:15", "Dormir"),
     ],
     3: [  # QUINTA-FEIRA
-        ("06:45", "⏰", "Bom dia! Hora de acordar e cuidar da pet."),
-        ("07:55", "⚠️", "Atenção: a aula de Complexidade começa em 5 minutos!"),
-        ("08:00", "🧠", "Iniciando: Aula INF0335 (Complexidade) - Foco Total."),
-        ("09:40", "💼", "Fim da aula. Iniciando: Trabalho - Tieta."),
-        ("11:30", "⏸️", "Pausa: Almoço Rápido."),
-        ("13:30", "💼", "Voltando ao Trabalho - Tieta."),
-        ("15:40", "⏸️", "Pausa: Café."),
-        ("15:55", "⚠️", "Atenção: a Reunião com a Ermis começa em 5 minutos!"),
-        ("16:00", "💻", "Iniciando: Aula INF0338 (CG) [Reunião Ermis às 16h]."),
-        ("16:45", "🗣️", "Fim da Reunião Ermis. Continue a Aula CG."),
-        ("17:40", "⏸️", "Pausa: Pet e Janta."),
-        ("18:50", "📚", "Iniciando: Estudar Complexidade."),
-        ("21:00", "⏸️", "Pausa: Tempo Livre."),
-        ("23:00", "🌙", "Já é tarde — hora de pensar em ir dormir."),
+        ("06:45 - 08:00", "Acordar"),
+        ("08:00 - 09:40", "Aula: Complexidade (foco total)"),
+        ("09:40 - 11:30", "Trabalho: Tieta"),
+        ("11:30 - 13:00", "Almoço rápido"),
+        ("13:00 - 15:40", "Trabalho: Tieta"),
+        ("15:40 - 16:00", "Pausa"),
+        ("16:00 - 17:40", "Aula: CG (Reunião Ermis 16:00-16:45)"),
+        ("17:40 - 18:50", "Janta"),
+        ("18:50 - 21:00", "Estudar: Complexidade"),
+        ("21:00 - 22:00", "Tempo livre"),
+        ("22:00 - 23:15", "Tempo livre / dormir"),
     ],
     4: [  # SEXTA-FEIRA
-        ("06:45", "⏰", "Bom dia! Hora de acordar, tomar café e cuidar da pet."),
-        ("08:00", "💼", "Iniciando: Trabalho - Tieta."),
-        ("11:30", "⏸️", "Pausa: Almoço e Janta."),
-        ("13:30", "📚", "Iniciando: Estudo - Livro de IA."),
-        ("13:55", "⚠️", "Atenção: a aula de PDI começa em 5 minutos!"),
-        ("14:00", "💻", "Iniciando: Aula INF0370 (PDI) [Foco Duplo: Athon]."),
-        ("15:40", "⏸️", "Pausa: Café."),
-        ("15:55", "⚠️", "Atenção: o foco com a Ermis começa em 5 minutos!"),
-        ("16:00", "💻", "Iniciando: Aula INF0289 (IHC) [Foco Duplo: Ermis]."),
-        ("17:40", "⏸️", "Pausa: Pet e Janta."),
-        ("18:50", "💻", "Iniciando: Aula INF0290 (Projeto) [Foco Duplo: Trab. PDI / Ceia Light]."),
-        ("22:00", "⏸️", "Pausa: Tempo Livre."),
+        ("06:45 - 08:00", "Acordar"),
+        ("08:00 - 09:40", "Trabalho: Tieta"),
+        ("09:40 - 11:30", "Trabalho: Tieta (Reunião 11h, 1x/mês)"),
+        ("11:30 - 13:00", "Almoço e janta"),
+        ("13:00 - 14:00", "Estudo: Livro IA"),
+        ("14:00 - 15:40", "Aula: PDI (foco: Athon)"),
+        ("15:40 - 16:00", "Pausa"),
+        ("16:00 - 17:40", "Aula: IHC (foco: Ermis)"),
+        ("17:40 - 18:50", "Janta"),
+        ("18:50 - 22:00", "Aula: Projeto (foco: trabalho PDI / Ceia Light)"),
+        ("22:00 - 23:15", "Tempo livre"),
     ],
 }
 
 
 def eventos_do_dia(dia_semana, agora):
-    eventos = list(CRONOGRAMA.get(dia_semana, []))
-    if dia_semana == 4 and agora.strftime("%Y-%m-%d") in REUNIOES_MENSAIS_SEXTA:
-        eventos += [
-            ("10:55", "⚠️", "Atenção: a reunião mensal às 11h começa em 5 minutos!"),
-            ("11:00", "🗣️", "Iniciando: Reunião mensal (11h)."),
-        ]
-        eventos.sort(key=lambda e: _minutos(e[0]))
-    return eventos
+    return list(CRONOGRAMA.get(dia_semana, []))
 
 
 def _minutos(hora_str):
     h, m = hora_str.split(":")
     return int(h) * 60 + int(m)
+
+
+def _inicio_minutos(faixa):
+    """Extrai o horário de início de uma faixa ('HH:MM - HH:MM' ou só
+    'HH:MM') em minutos desde meia-noite."""
+    return _minutos(faixa.split(" - ")[0])
 
 
 # --------------------------------------------------------------------------
@@ -205,7 +189,7 @@ def resumo_pendente(dia_semana, agora, checkpoint_data, atraso_maximo_minutos=AT
     Retorna (deve_enviar, atraso_minutos, motivo). `atraso_minutos` é
     quanto tempo já passou de HORA_RESUMO (0 se está em cima da hora).
     Se atraso_minutos > atraso_maximo_minutos, desiste do dia (não vale
-    mais mandar um resumo "bom dia" à tarde)."""
+    mais mandar o resumo à tarde)."""
     hoje_str = agora.strftime("%Y-%m-%d")
 
     if checkpoint_data == hoje_str:
@@ -234,20 +218,20 @@ COR_RESUMO = 0x5865F2  # blurple do Discord
 
 
 def montar_resumo(eventos):
-    return "\n".join(f"{emoji} **{hora}** — {msg}" for hora, emoji, msg in eventos)
+    return "\n".join(f"**{faixa}** — {desc}" for faixa, desc in eventos)
 
 
 def enviar_resumo(dia_semana, eventos, atraso_min=None):
-    """Envia o resumo do dia inteiro como um embed único. Retorna True
-    se enviou com sucesso, False se falhou."""
+    """Envia o resumo do dia como um embed único. Retorna True se
+    enviou com sucesso, False se falhou."""
     nome_dia = NOMES_DIAS.get(dia_semana, "Hoje")
     embed = {
-        "title": f"📅 Rotina de {nome_dia}",
+        "title": f"Rotina — {nome_dia}",
         "description": montar_resumo(eventos),
         "color": COR_RESUMO,
     }
     if atraso_min is not None and atraso_min > 10:
-        embed["footer"] = {"text": f"⏱️ Enviado com {atraso_min} min de atraso (agendador demorou)"}
+        embed["footer"] = {"text": f"Enviado com {atraso_min} min de atraso"}
 
     try:
         resposta = requests.post(WEBHOOK_URL, json={"embeds": [embed]}, timeout=10)
@@ -262,7 +246,7 @@ def checar_uma_vez():
     """Roda uma vez (chamado pelo agendador externo). Manda o resumo do
     dia se ele estiver pendente; se estiver atrasado demais, desiste em
     silêncio e marca o dia como tratado, pra não ficar tentando (e nem
-    mandar um "bom dia" de tardezinha)."""
+    mandar o resumo de tardezinha)."""
     agora = datetime.now(FUSO_HORARIO)
     hoje_str = agora.strftime("%Y-%m-%d")
     dia_semana = agora.weekday()
@@ -279,7 +263,7 @@ def checar_uma_vez():
     eventos = eventos_do_dia(dia_semana, agora)
     if enviar_resumo(dia_semana, eventos, atraso_min=atraso):
         _gravar_checkpoint(hoje_str)
-        print(f"Resumo de {NOMES_DIAS.get(dia_semana)} enviado ({len(eventos)} eventos).")
+        print(f"Resumo de {NOMES_DIAS.get(dia_semana)} enviado ({len(eventos)} itens).")
     else:
         # Sai com erro para o GitHub Actions marcar o workflow como
         # falho e avisar por e-mail - sem gravar checkpoint, a próxima

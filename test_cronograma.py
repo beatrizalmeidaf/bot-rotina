@@ -12,7 +12,7 @@ import unittest
 
 import bot_rotina as bot
 
-PADRAO_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+PADRAO_FAIXA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d( - ([01]\d|2[0-3]):[0-5]\d)?$")
 
 
 def _agora(hora_str, dia=0):
@@ -24,36 +24,18 @@ def _agora(hora_str, dia=0):
 
 
 class TestCronograma(unittest.TestCase):
-    def test_horarios_bem_formados(self):
+    def test_faixas_bem_formadas(self):
         for dia, eventos in bot.CRONOGRAMA.items():
-            for hora, _emoji, _msg in eventos:
+            for faixa, _desc in eventos:
                 self.assertRegex(
-                    hora, PADRAO_HORA, f"Horário inválido '{hora}' no dia {dia}"
+                    faixa, PADRAO_FAIXA, f"Faixa de horário inválida '{faixa}' no dia {dia}"
                 )
-
-    def test_sem_horarios_duplicados(self):
-        for dia, eventos in bot.CRONOGRAMA.items():
-            horas = [h for h, _, _ in eventos]
-            self.assertEqual(
-                len(horas), len(set(horas)),
-                f"Horário duplicado no dia {dia}: {horas}",
-            )
 
     def test_ordem_cronologica(self):
         for dia, eventos in bot.CRONOGRAMA.items():
-            minutos = [bot._minutos(h) for h, _, _ in eventos]
+            minutos = [bot._inicio_minutos(faixa) for faixa, _ in eventos]
             self.assertEqual(
                 minutos, sorted(minutos), f"Dia {dia} está fora de ordem cronológica"
-            )
-
-    def test_reunioes_mensais_datas_validas(self):
-        for data in bot.REUNIOES_MENSAIS_SEXTA:
-            try:
-                d = datetime.date.fromisoformat(data)
-            except ValueError:
-                self.fail(f"Data inválida em REUNIOES_MENSAIS_SEXTA: '{data}'")
-            self.assertEqual(
-                d.weekday(), 4, f"Data '{data}' em REUNIOES_MENSAIS_SEXTA não é sexta-feira"
             )
 
 
@@ -63,7 +45,7 @@ class TestResumoPendente(unittest.TestCase):
     agendador e o corte para não mandar um resumo tarde demais."""
 
     def test_antes_da_hora_nao_envia(self):
-        deve, atraso, motivo = bot.resumo_pendente(0, _agora("06:59"), None)
+        deve, atraso, _motivo = bot.resumo_pendente(0, _agora("06:59"), None)
         self.assertFalse(deve)
         self.assertEqual(atraso, 0)
 
